@@ -27,8 +27,8 @@ public class Material {
     @Column(name = "type", nullable = false, length = 10)
     private MaterialType type;
 
-    @Column(name = "url", nullable = false, length = 200)
-    private String url;
+    @Column(name = "resource_url", nullable = false, length = 200)
+    private String resourceUrl;
 
     @Column(name = "creation_date", nullable = false)
     private LocalDateTime creationDate;
