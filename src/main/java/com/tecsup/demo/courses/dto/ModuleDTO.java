@@ -6,6 +6,6 @@ import lombok.Data;
 public class ModuleDTO {
     private String title;
     private String description;
-    private Integer order;
+    private Integer moduleOrder;
     private Long courseId;
 }

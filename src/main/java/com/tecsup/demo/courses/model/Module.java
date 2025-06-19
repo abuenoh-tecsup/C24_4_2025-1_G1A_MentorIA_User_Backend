@@ -23,8 +23,8 @@ public class Module {
     @Column(name = "description", columnDefinition = "LONGTEXT")
     private String description;
 
-    @Column(name = "order", nullable = false)
-    private Integer order;
+    @Column(name = "module_order", nullable = false)
+    private Integer moduleOrder;
 
     @ManyToOne
     @JoinColumn(name = "course_id", nullable = false)

@@ -6,6 +6,6 @@ import com.tecsup.demo.courses.model.Module;
 import java.util.List;
 
 public interface ModuleRepository extends JpaRepository<Module, Long> {
-    boolean existsByCourseIdAndOrder(Long courseId, Integer order);
-    List<Module> findByCourseIdOrderByOrder(Long courseId);
+    boolean existsByCourseIdAndModuleOrder(Long courseId, Integer order);
+    List<Module> findByCourseIdOrderByModuleOrder(Long courseId);
 }
