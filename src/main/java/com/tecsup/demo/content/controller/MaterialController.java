@@ -7,11 +7,12 @@ import com.tecsup.demo.content.repository.MaterialRepository;
 import com.tecsup.demo.courses.repository.ModuleRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/materials")
@@ -24,10 +25,11 @@ public class MaterialController {
     private ModuleRepository moduleRepository;
 
     @PostMapping
-    public String crearMaterial(@RequestBody MaterialDTO dto) {
+    public ResponseEntity<?> crearMaterial(@RequestBody MaterialDTO dto) {
         Optional<Module> moduleOpt = moduleRepository.findById(dto.getModuleId());
         if (moduleOpt.isEmpty()) {
-            return "Módulo no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Módulo no encontrado"));
         }
 
         Material material = new Material();
@@ -39,24 +41,31 @@ public class MaterialController {
         material.setModule(moduleOpt.get());
 
         materialRepository.save(material);
-        return "Material creado correctamente";
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Material creado correctamente"));
     }
 
     @GetMapping
-    public List<Material> listarMateriales() {
-        return materialRepository.findAll();
+    public ResponseEntity<List<Material>> listarMateriales() {
+        return ResponseEntity.ok(materialRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public Material obtenerMaterial(@PathVariable Long id) {
-        return materialRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerMaterial(@PathVariable Long id) {
+        Optional<Material> materialOpt = materialRepository.findById(id);
+        if (materialOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Material no encontrado"));
+        }
+        return ResponseEntity.ok(materialOpt.get());
     }
 
     @PutMapping("/{id}")
-    public String actualizarMaterial(@PathVariable Long id, @RequestBody MaterialDTO dto) {
+    public ResponseEntity<?> actualizarMaterial(@PathVariable Long id, @RequestBody MaterialDTO dto) {
         Optional<Material> materialOpt = materialRepository.findById(id);
         if (materialOpt.isEmpty()) {
-            return "Material no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Material no encontrado"));
         }
 
         Material material = materialOpt.get();
@@ -67,20 +76,25 @@ public class MaterialController {
 
         if (!material.getModule().getId().equals(dto.getModuleId())) {
             Optional<Module> moduleOpt = moduleRepository.findById(dto.getModuleId());
-            moduleOpt.ifPresent(material::setModule);
+            if (moduleOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Nuevo módulo no encontrado"));
+            }
+            material.setModule(moduleOpt.get());
         }
 
         materialRepository.save(material);
-        return "Material actualizado correctamente";
+        return ResponseEntity.ok(Map.of("message", "Material actualizado correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarMaterial(@PathVariable Long id) {
-        if (materialRepository.existsById(id)) {
-            materialRepository.deleteById(id);
-            return "Material eliminado correctamente";
-        } else {
-            return "Material no encontrado";
+    public ResponseEntity<?> eliminarMaterial(@PathVariable Long id) {
+        if (!materialRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Material no encontrado"));
         }
+
+        materialRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Material eliminado correctamente"));
     }
 }

@@ -9,10 +9,13 @@ import com.tecsup.demo.courses.repository.CourseRepository;
 import com.tecsup.demo.authentication.repository.UserRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -29,26 +32,26 @@ public class AnnouncementController {
     private UserRepository userRepository;
 
     @PostMapping
-    public String crearAnnouncement(@RequestBody AnnouncementDTO dto) {
-        // Verificar si el autor (usuario) existe
+    public ResponseEntity<?> crearAnnouncement(@RequestBody AnnouncementDTO dto) {
         Optional<User> authorOpt = userRepository.findById(dto.getAuthorId());
         if (authorOpt.isEmpty()) {
-            return "Autor no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Autor no encontrado"));
         }
 
-        // Verificar si el curso existe
         Optional<Course> courseOpt = courseRepository.findById(dto.getCourseId());
         if (courseOpt.isEmpty()) {
-            return "Curso no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Curso no encontrado"));
         }
 
-        // Verificar si el autor es el profesor del curso o un admin
         User author = authorOpt.get();
         Course course = courseOpt.get();
 
         if (!author.getRole().equals(User.UserRole.admin) &&
                 !course.getProfessor().getId().equals(author.getId())) {
-            return "Solo el profesor del curso o un administrador pueden crear anuncios";
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "Solo el profesor del curso o un administrador pueden crear anuncios"));
         }
 
         Announcement announcement = new Announcement();
@@ -60,61 +63,71 @@ public class AnnouncementController {
         announcement.setCourse(course);
 
         announcementRepository.save(announcement);
-        return "Anuncio creado correctamente";
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Anuncio creado correctamente"));
     }
 
     @GetMapping
-    public List<Announcement> listarAnnouncements() {
-        return announcementRepository.findAll();
+    public ResponseEntity<List<Announcement>> listarAnnouncements() {
+        return ResponseEntity.ok(announcementRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public Announcement obtenerAnnouncement(@PathVariable Long id) {
-        return announcementRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerAnnouncement(@PathVariable Long id) {
+        Optional<Announcement> announcementOpt = announcementRepository.findById(id);
+        if (announcementOpt.isPresent()) {
+            return ResponseEntity.ok(announcementOpt.get());
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Anuncio no encontrado"));
+        }
     }
 
     @GetMapping("/course/{courseId}")
-    public List<Announcement> listarAnnouncementsPorCurso(@PathVariable Long courseId) {
-        return announcementRepository.findByCourseIdOrderByPublicationDateDesc(courseId);
+    public ResponseEntity<List<Announcement>> listarAnnouncementsPorCurso(@PathVariable Long courseId) {
+        return ResponseEntity.ok(announcementRepository.findByCourseIdOrderByPublicationDateDesc(courseId));
     }
 
     @GetMapping("/author/{authorId}")
-    public List<Announcement> listarAnnouncementsPorAutor(@PathVariable Long authorId) {
-        return announcementRepository.findByAuthorIdOrderByCreationDateDesc(authorId);
+    public ResponseEntity<List<Announcement>> listarAnnouncementsPorAutor(@PathVariable Long authorId) {
+        return ResponseEntity.ok(announcementRepository.findByAuthorIdOrderByCreationDateDesc(authorId));
     }
 
     @PutMapping("/{id}")
-    public String actualizarAnnouncement(@PathVariable Long id, @RequestBody AnnouncementDTO dto) {
+    public ResponseEntity<?> actualizarAnnouncement(@PathVariable Long id, @RequestBody AnnouncementDTO dto) {
         Optional<Announcement> announcementOpt = announcementRepository.findById(id);
         if (announcementOpt.isEmpty()) {
-            return "Anuncio no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Anuncio no encontrado"));
         }
 
         Announcement announcement = announcementOpt.get();
 
-        // Verificar si se cambia el autor
+        // Cambiar autor si es necesario
         if (!announcement.getAuthor().getId().equals(dto.getAuthorId())) {
             Optional<User> authorOpt = userRepository.findById(dto.getAuthorId());
             if (authorOpt.isEmpty()) {
-                return "Autor no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Autor no encontrado"));
             }
             announcement.setAuthor(authorOpt.get());
         }
 
-        // Verificar si se cambia el curso
+        // Cambiar curso si es necesario
         if (!announcement.getCourse().getId().equals(dto.getCourseId())) {
             Optional<Course> courseOpt = courseRepository.findById(dto.getCourseId());
             if (courseOpt.isEmpty()) {
-                return "Curso no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Curso no encontrado"));
             }
 
-            // Verificar permisos para el nuevo curso
-            User author = announcement.getAuthor();
             Course newCourse = courseOpt.get();
+            User author = announcement.getAuthor();
 
             if (!author.getRole().equals(User.UserRole.admin) &&
                     !newCourse.getProfessor().getId().equals(author.getId())) {
-                return "Solo el profesor del curso o un administrador pueden crear anuncios";
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("message", "Solo el profesor del curso o un administrador pueden modificar el curso del anuncio"));
             }
 
             announcement.setCourse(newCourse);
@@ -125,16 +138,17 @@ public class AnnouncementController {
         announcement.setPublicationDate(dto.getPublicationDate());
 
         announcementRepository.save(announcement);
-        return "Anuncio actualizado correctamente";
+        return ResponseEntity.ok(Map.of("message", "Anuncio actualizado correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarAnnouncement(@PathVariable Long id) {
+    public ResponseEntity<?> eliminarAnnouncement(@PathVariable Long id) {
         if (announcementRepository.existsById(id)) {
             announcementRepository.deleteById(id);
-            return "Anuncio eliminado correctamente";
+            return ResponseEntity.ok(Map.of("message", "Anuncio eliminado correctamente"));
         } else {
-            return "Anuncio no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Anuncio no encontrado"));
         }
     }
 }

@@ -9,10 +9,11 @@ import com.tecsup.demo.authentication.repository.UserRepository;
 import com.tecsup.demo.academic.repository.SubjectRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/courses")
@@ -28,23 +29,23 @@ public class CourseController {
     private SubjectRepository subjectRepository;
 
     @PostMapping
-    public String crearCourse(@RequestBody CourseDTO dto) {
-        // Verificar si el profesor (usuario) existe
+    public ResponseEntity<?> crearCourse(@RequestBody CourseDTO dto) {
         Optional<User> professorOpt = userRepository.findById(dto.getProfessorId());
         if (professorOpt.isEmpty()) {
-            return "Profesor no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Profesor no encontrado"));
         }
 
-        // Verificar si el usuario es realmente un profesor
         User professor = professorOpt.get();
         if (!professor.getRole().equals(User.UserRole.professor)) {
-            return "El usuario seleccionado no es un profesor";
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("message", "El usuario seleccionado no es un profesor"));
         }
 
-        // Verificar si la materia existe
         Optional<Subject> subjectOpt = subjectRepository.findById(dto.getSubjectId());
         if (subjectOpt.isEmpty()) {
-            return "Materia no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Materia no encontrada"));
         }
 
         Course course = new Course();
@@ -52,73 +53,86 @@ public class CourseController {
         course.setSubject(subjectOpt.get());
 
         courseRepository.save(course);
-        return "Curso creado correctamente";
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Curso creado correctamente"));
     }
 
     @GetMapping
-    public List<Course> listarCourses() {
-        return courseRepository.findAll();
+    public ResponseEntity<List<Course>> listarCourses() {
+        return ResponseEntity.ok(courseRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public Course obtenerCourse(@PathVariable Long id) {
-        return courseRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerCourse(@PathVariable Long id) {
+        Optional<Course> courseOpt = courseRepository.findById(id);
+        if (courseOpt.isPresent()) {
+            return ResponseEntity.ok(courseOpt.get());
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Curso no encontrado"));
+        }
     }
 
     @GetMapping("/professor/{professorId}")
-    public List<Course> listarCoursesPorProfesor(@PathVariable Long professorId) {
-        return courseRepository.findByProfessorId(professorId);
+    public ResponseEntity<List<Course>> listarCoursesPorProfesor(@PathVariable Long professorId) {
+        return ResponseEntity.ok(courseRepository.findByProfessorId(professorId));
     }
 
     @GetMapping("/subject/{subjectId}")
-    public List<Course> listarCoursesPorMateria(@PathVariable Long subjectId) {
-        return courseRepository.findBySubjectId(subjectId);
+    public ResponseEntity<List<Course>> listarCoursesPorMateria(@PathVariable Long subjectId) {
+        return ResponseEntity.ok(courseRepository.findBySubjectId(subjectId));
     }
 
     @PutMapping("/{id}")
-    public String actualizarCourse(@PathVariable Long id, @RequestBody CourseDTO dto) {
+    public ResponseEntity<?> actualizarCourse(@PathVariable Long id, @RequestBody CourseDTO dto) {
         Optional<Course> courseOpt = courseRepository.findById(id);
         if (courseOpt.isEmpty()) {
-            return "Curso no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Curso no encontrado"));
         }
 
         Course course = courseOpt.get();
 
-        // Si se cambia el profesor, verificar que exista y sea realmente un profesor
         if (!course.getProfessor().getId().equals(dto.getProfessorId())) {
             Optional<User> professorOpt = userRepository.findById(dto.getProfessorId());
             if (professorOpt.isEmpty()) {
-                return "Profesor no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Profesor no encontrado"));
             }
 
             User professor = professorOpt.get();
             if (!professor.getRole().equals(User.UserRole.professor)) {
-                return "El usuario seleccionado no es un profesor";
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Map.of("message", "El usuario seleccionado no es un profesor"));
             }
 
             course.setProfessor(professor);
         }
 
-        // Si se cambia la materia, verificar que exista
         if (!course.getSubject().getId().equals(dto.getSubjectId())) {
             Optional<Subject> subjectOpt = subjectRepository.findById(dto.getSubjectId());
             if (subjectOpt.isEmpty()) {
-                return "Materia no encontrada";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Materia no encontrada"));
             }
+
             course.setSubject(subjectOpt.get());
         }
 
         courseRepository.save(course);
-        return "Curso actualizado correctamente";
+
+        return ResponseEntity.ok(Map.of("message", "Curso actualizado correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarCourse(@PathVariable Long id) {
+    public ResponseEntity<?> eliminarCourse(@PathVariable Long id) {
         if (courseRepository.existsById(id)) {
             courseRepository.deleteById(id);
-            return "Curso eliminado correctamente";
+            return ResponseEntity.ok(Map.of("message", "Curso eliminado correctamente"));
         } else {
-            return "Curso no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Curso no encontrado"));
         }
     }
 }

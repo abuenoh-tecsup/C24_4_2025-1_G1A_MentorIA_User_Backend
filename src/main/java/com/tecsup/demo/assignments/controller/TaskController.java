@@ -7,10 +7,11 @@ import com.tecsup.demo.assignments.repository.TaskRepository;
 import com.tecsup.demo.courses.repository.ModuleRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/tasks")
@@ -23,16 +24,16 @@ public class TaskController {
     private ModuleRepository moduleRepository;
 
     @PostMapping
-    public String crearTask(@RequestBody TaskDTO dto) {
-        // Verificar si el módulo existe
+    public ResponseEntity<?> crearTask(@RequestBody TaskDTO dto) {
         Optional<Module> moduleOpt = moduleRepository.findById(dto.getModuleId());
         if (moduleOpt.isEmpty()) {
-            return "Módulo no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Módulo no encontrado"));
         }
 
-        // Validar fechas
         if (dto.getDueDate().isBefore(dto.getPublicationDate())) {
-            return "La fecha de vencimiento no puede ser anterior a la fecha de publicación";
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "La fecha de vencimiento no puede ser anterior a la fecha de publicación"));
         }
 
         Task task = new Task();
@@ -43,45 +44,57 @@ public class TaskController {
         task.setModule(moduleOpt.get());
 
         taskRepository.save(task);
-        return "Tarea creada correctamente";
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Tarea creada correctamente"));
     }
 
     @GetMapping
-    public List<Task> listarTasks() {
-        return taskRepository.findAll();
+    public ResponseEntity<List<Task>> listarTasks() {
+        return ResponseEntity.ok(taskRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public Task obtenerTask(@PathVariable Long id) {
-        return taskRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerTask(@PathVariable Long id) {
+        Optional<Task> taskOpt = taskRepository.findById(id);
+        if (taskOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Tarea no encontrada"));
+        }
+        return ResponseEntity.ok(taskOpt.get());
     }
 
     @GetMapping("/module/{moduleId}")
-    public List<Task> listarTasksPorModulo(@PathVariable Long moduleId) {
-        return taskRepository.findByModuleIdOrderByDueDateAsc(moduleId);
+    public ResponseEntity<?> listarTasksPorModulo(@PathVariable Long moduleId) {
+        if (!moduleRepository.existsById(moduleId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Módulo no encontrado"));
+        }
+        List<Task> tasks = taskRepository.findByModuleIdOrderByDueDateAsc(moduleId);
+        return ResponseEntity.ok(tasks);
     }
 
     @PutMapping("/{id}")
-    public String actualizarTask(@PathVariable Long id, @RequestBody TaskDTO dto) {
+    public ResponseEntity<?> actualizarTask(@PathVariable Long id, @RequestBody TaskDTO dto) {
         Optional<Task> taskOpt = taskRepository.findById(id);
         if (taskOpt.isEmpty()) {
-            return "Tarea no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Tarea no encontrada"));
         }
 
         Task task = taskOpt.get();
 
-        // Si se cambia el módulo, verificar que exista
         if (!task.getModule().getId().equals(dto.getModuleId())) {
             Optional<Module> moduleOpt = moduleRepository.findById(dto.getModuleId());
             if (moduleOpt.isEmpty()) {
-                return "Módulo no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Módulo no encontrado"));
             }
             task.setModule(moduleOpt.get());
         }
 
-        // Validar fechas
         if (dto.getDueDate().isBefore(dto.getPublicationDate())) {
-            return "La fecha de vencimiento no puede ser anterior a la fecha de publicación";
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "La fecha de vencimiento no puede ser anterior a la fecha de publicación"));
         }
 
         task.setTitle(dto.getTitle());
@@ -90,16 +103,17 @@ public class TaskController {
         task.setDueDate(dto.getDueDate());
 
         taskRepository.save(task);
-        return "Tarea actualizada correctamente";
+        return ResponseEntity.ok(Map.of("message", "Tarea actualizada correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarTask(@PathVariable Long id) {
-        if (taskRepository.existsById(id)) {
-            taskRepository.deleteById(id);
-            return "Tarea eliminada correctamente";
-        } else {
-            return "Tarea no encontrada";
+    public ResponseEntity<?> eliminarTask(@PathVariable Long id) {
+        if (!taskRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Tarea no encontrada"));
         }
+
+        taskRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Tarea eliminada correctamente"));
     }
 }

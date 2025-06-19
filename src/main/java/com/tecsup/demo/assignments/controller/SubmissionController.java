@@ -9,11 +9,12 @@ import com.tecsup.demo.assignments.repository.TaskRepository;
 import com.tecsup.demo.authentication.repository.UserRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/submissions")
@@ -29,22 +30,22 @@ public class SubmissionController {
     private TaskRepository taskRepository;
 
     @PostMapping
-    public String crearSubmission(@RequestBody SubmissionDTO dto) {
-        // Verificar si el usuario existe
+    public ResponseEntity<?> crearSubmission(@RequestBody SubmissionDTO dto) {
         Optional<User> userOpt = userRepository.findById(dto.getUserId());
         if (userOpt.isEmpty()) {
-            return "Usuario no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Usuario no encontrado"));
         }
 
-        // Verificar si la tarea existe
         Optional<Task> taskOpt = taskRepository.findById(dto.getTaskId());
         if (taskOpt.isEmpty()) {
-            return "Tarea no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Tarea no encontrada"));
         }
 
-        // Verificar si ya existe una entrega para este usuario y tarea
         if (submissionRepository.existsByUserIdAndTaskId(dto.getUserId(), dto.getTaskId())) {
-            return "Ya existe una entrega de este usuario para esta tarea";
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe una entrega de este usuario para esta tarea"));
         }
 
         Submission submission = new Submission();
@@ -57,61 +58,78 @@ public class SubmissionController {
         submission.setFileUrl(dto.getFileUrl());
 
         submissionRepository.save(submission);
-        return "Entrega creada correctamente";
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Entrega creada correctamente"));
     }
 
     @GetMapping
-    public List<Submission> listarSubmissions() {
-        return submissionRepository.findAll();
+    public ResponseEntity<List<Submission>> listarSubmissions() {
+        return ResponseEntity.ok(submissionRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public Submission obtenerSubmission(@PathVariable Long id) {
-        return submissionRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerSubmission(@PathVariable Long id) {
+        return submissionRepository.findById(id)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElse(ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Entrega no encontrada")));
     }
 
     @GetMapping("/task/{taskId}")
-    public List<Submission> listarSubmissionsPorTarea(@PathVariable Long taskId) {
-        return submissionRepository.findByTaskIdOrderBySubmissionDateDesc(taskId);
+    public ResponseEntity<?> listarSubmissionsPorTarea(@PathVariable Long taskId) {
+        if (!taskRepository.existsById(taskId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Tarea no encontrada"));
+        }
+        List<Submission> submissions = submissionRepository.findByTaskIdOrderBySubmissionDateDesc(taskId);
+        return ResponseEntity.ok(submissions);
     }
 
     @GetMapping("/user/{userId}")
-    public List<Submission> listarSubmissionsPorUsuario(@PathVariable Long userId) {
-        return submissionRepository.findByUserIdOrderBySubmissionDateDesc(userId);
+    public ResponseEntity<?> listarSubmissionsPorUsuario(@PathVariable Long userId) {
+        if (!userRepository.existsById(userId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Usuario no encontrado"));
+        }
+        List<Submission> submissions = submissionRepository.findByUserIdOrderBySubmissionDateDesc(userId);
+        return ResponseEntity.ok(submissions);
     }
 
     @PutMapping("/{id}")
-    public String actualizarSubmission(@PathVariable Long id, @RequestBody SubmissionDTO dto) {
+    public ResponseEntity<?> actualizarSubmission(@PathVariable Long id, @RequestBody SubmissionDTO dto) {
         Optional<Submission> submissionOpt = submissionRepository.findById(id);
         if (submissionOpt.isEmpty()) {
-            return "Entrega no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Entrega no encontrada"));
         }
 
         Submission submission = submissionOpt.get();
 
-        // Si se cambia el usuario, verificar que exista
-        if (!submission.getUser().getId().equals(dto.getUserId())) {
+        boolean userChanged = !submission.getUser().getId().equals(dto.getUserId());
+        boolean taskChanged = !submission.getTask().getId().equals(dto.getTaskId());
+
+        if (userChanged) {
             Optional<User> userOpt = userRepository.findById(dto.getUserId());
             if (userOpt.isEmpty()) {
-                return "Usuario no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Usuario no encontrado"));
             }
             submission.setUser(userOpt.get());
         }
 
-        // Si se cambia la tarea, verificar que exista
-        if (!submission.getTask().getId().equals(dto.getTaskId())) {
+        if (taskChanged) {
             Optional<Task> taskOpt = taskRepository.findById(dto.getTaskId());
             if (taskOpt.isEmpty()) {
-                return "Tarea no encontrada";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Tarea no encontrada"));
             }
             submission.setTask(taskOpt.get());
         }
 
-        // Verificar duplicados si cambió usuario o tarea
-        if ((!submission.getUser().getId().equals(dto.getUserId()) ||
-                !submission.getTask().getId().equals(dto.getTaskId())) &&
+        if ((userChanged || taskChanged) &&
                 submissionRepository.existsByUserIdAndTaskId(dto.getUserId(), dto.getTaskId())) {
-            return "Ya existe una entrega de este usuario para esta tarea";
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe una entrega de este usuario para esta tarea"));
         }
 
         submission.setStatus(dto.getStatus());
@@ -120,16 +138,17 @@ public class SubmissionController {
         submission.setFileUrl(dto.getFileUrl());
 
         submissionRepository.save(submission);
-        return "Entrega actualizada correctamente";
+        return ResponseEntity.ok(Map.of("message", "Entrega actualizada correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarSubmission(@PathVariable Long id) {
-        if (submissionRepository.existsById(id)) {
-            submissionRepository.deleteById(id);
-            return "Entrega eliminada correctamente";
-        } else {
-            return "Entrega no encontrada";
+    public ResponseEntity<?> eliminarSubmission(@PathVariable Long id) {
+        if (!submissionRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Entrega no encontrada"));
         }
+
+        submissionRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Entrega eliminada correctamente"));
     }
 }

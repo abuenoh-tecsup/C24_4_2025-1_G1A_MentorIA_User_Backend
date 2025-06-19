@@ -5,10 +5,11 @@ import com.tecsup.demo.academic.model.Subject;
 import com.tecsup.demo.academic.repository.SubjectRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/subjects")
@@ -18,45 +19,53 @@ public class SubjectController {
     private SubjectRepository subjectRepository;
 
     @PostMapping
-    public String crearSubject(@RequestBody SubjectDTO dto) {
+    public ResponseEntity<?> crearSubject(@RequestBody SubjectDTO dto) {
         Subject subject = new Subject();
         subject.setName(dto.getName());
 
         subjectRepository.save(subject);
-        return "Materia creada correctamente";
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Materia creada correctamente"));
     }
 
     @GetMapping
-    public List<Subject> listarSubjects() {
-        return subjectRepository.findAll();
+    public ResponseEntity<List<Subject>> listarSubjects() {
+        return ResponseEntity.ok(subjectRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public Subject obtenerSubject(@PathVariable Long id) {
-        return subjectRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerSubject(@PathVariable Long id) {
+        Optional<Subject> subjectOpt = subjectRepository.findById(id);
+        if (subjectOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Materia no encontrada"));
+        }
+        return ResponseEntity.ok(subjectOpt.get());
     }
 
     @PutMapping("/{id}")
-    public String actualizarSubject(@PathVariable Long id, @RequestBody SubjectDTO dto) {
+    public ResponseEntity<?> actualizarSubject(@PathVariable Long id, @RequestBody SubjectDTO dto) {
         Optional<Subject> subjectOpt = subjectRepository.findById(id);
         if (subjectOpt.isEmpty()) {
-            return "Materia no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Materia no encontrada"));
         }
 
         Subject subject = subjectOpt.get();
         subject.setName(dto.getName());
 
         subjectRepository.save(subject);
-        return "Materia actualizada correctamente";
+        return ResponseEntity.ok(Map.of("message", "Materia actualizada correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarSubject(@PathVariable Long id) {
-        if (subjectRepository.existsById(id)) {
-            subjectRepository.deleteById(id);
-            return "Materia eliminada correctamente";
-        } else {
-            return "Materia no encontrada";
+    public ResponseEntity<?> eliminarSubject(@PathVariable Long id) {
+        if (!subjectRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Materia no encontrada"));
         }
+
+        subjectRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Materia eliminada correctamente"));
     }
 }

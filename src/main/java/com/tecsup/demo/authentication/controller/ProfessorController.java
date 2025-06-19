@@ -7,10 +7,11 @@ import com.tecsup.demo.authentication.repository.ProfessorRepository;
 import com.tecsup.demo.authentication.repository.UserRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/professors")
@@ -23,21 +24,22 @@ public class ProfessorController {
     private UserRepository userRepository;
 
     @PostMapping
-    public String crearProfessor(@RequestBody ProfessorDTO dto) {
-        // Verificar si el usuario existe
+    public ResponseEntity<?> crearProfessor(@RequestBody ProfessorDTO dto) {
         Optional<User> userOpt = userRepository.findById(dto.getUserId());
+
         if (userOpt.isEmpty()) {
-            return "Usuario no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Usuario no encontrado"));
         }
 
-        // Verificar si ya existe un profesor con el mismo código de empleado
         if (professorRepository.existsByEmployeeCode(dto.getEmployeeCode())) {
-            return "Ya existe un profesor con el código de empleado: " + dto.getEmployeeCode();
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe un profesor con el código de empleado: " + dto.getEmployeeCode()));
         }
 
-        // Verificar si el usuario ya está asociado a otro profesor
         if (professorRepository.existsByUserId(dto.getUserId())) {
-            return "El usuario ya está asociado a otro profesor";
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "El usuario ya está asociado a otro profesor"));
         }
 
         Professor professor = new Professor();
@@ -50,43 +52,57 @@ public class ProfessorController {
         professor.setUser(userOpt.get());
 
         professorRepository.save(professor);
-        return "Profesor creado correctamente";
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Profesor creado correctamente"));
     }
 
     @GetMapping
-    public List<Professor> listarProfessors() {
-        return professorRepository.findAll();
+    public ResponseEntity<List<Professor>> listarProfessors() {
+        List<Professor> profesores = professorRepository.findAll();
+        return ResponseEntity.ok(profesores);
     }
 
     @GetMapping("/{id}")
-    public Professor obtenerProfessor(@PathVariable Long id) {
-        return professorRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerProfessor(@PathVariable Long id) {
+        Optional<Professor> professorOpt = professorRepository.findById(id);
+
+        if (professorOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Profesor no encontrado"));
+        }
+
+        return ResponseEntity.ok(professorOpt.get());
     }
 
     @PutMapping("/{id}")
-    public String actualizarProfessor(@PathVariable Long id, @RequestBody ProfessorDTO dto) {
+    public ResponseEntity<?> actualizarProfessor(@PathVariable Long id, @RequestBody ProfessorDTO dto) {
         Optional<Professor> professorOpt = professorRepository.findById(id);
+
         if (professorOpt.isEmpty()) {
-            return "Profesor no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Profesor no encontrado"));
         }
 
         Professor professor = professorOpt.get();
 
-        // Verificar si el nuevo código de empleado ya existe (y no es el mismo profesor)
         if (!professor.getEmployeeCode().equals(dto.getEmployeeCode()) &&
                 professorRepository.existsByEmployeeCode(dto.getEmployeeCode())) {
-            return "Ya existe un profesor con el código de empleado: " + dto.getEmployeeCode();
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe un profesor con el código de empleado: " + dto.getEmployeeCode()));
         }
 
-        // Si se cambia el usuario, verificar que exista y no esté asociado a otro profesor
         if (!professor.getUser().getId().equals(dto.getUserId())) {
             Optional<User> userOpt = userRepository.findById(dto.getUserId());
+
             if (userOpt.isEmpty()) {
-                return "Usuario no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Usuario no encontrado"));
             }
 
             if (professorRepository.existsByUserId(dto.getUserId())) {
-                return "El usuario ya está asociado a otro profesor";
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of("message", "El usuario ya está asociado a otro profesor"));
             }
 
             professor.setUser(userOpt.get());
@@ -100,16 +116,18 @@ public class ProfessorController {
         professor.setStatus(dto.getStatus());
 
         professorRepository.save(professor);
-        return "Profesor actualizado correctamente";
+
+        return ResponseEntity.ok(Map.of("message", "Profesor actualizado correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarProfessor(@PathVariable Long id) {
-        if (professorRepository.existsById(id)) {
-            professorRepository.deleteById(id);
-            return "Profesor eliminado correctamente";
-        } else {
-            return "Profesor no encontrado";
+    public ResponseEntity<?> eliminarProfessor(@PathVariable Long id) {
+        if (!professorRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Profesor no encontrado"));
         }
+
+        professorRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Profesor eliminado correctamente"));
     }
 }

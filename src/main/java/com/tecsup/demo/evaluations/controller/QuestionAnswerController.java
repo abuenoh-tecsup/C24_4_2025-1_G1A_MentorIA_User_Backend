@@ -8,9 +8,11 @@ import com.tecsup.demo.evaluations.repository.QuestionAnswerRepository;
 import com.tecsup.demo.evaluations.repository.EvaluationAttemptRepository;
 import com.tecsup.demo.evaluations.repository.QuestionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
-import java.util.Optional;
+
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/question-answers")
@@ -26,22 +28,23 @@ public class QuestionAnswerController {
     private QuestionRepository questionRepository;
 
     @PostMapping
-    public String crearAnswer(@RequestBody QuestionAnswerDTO dto) {
-        // Verificar si el intento existe
+    public ResponseEntity<?> crearAnswer(@RequestBody QuestionAnswerDTO dto) {
         Optional<EvaluationAttempt> attemptOpt = attemptRepository.findById(dto.getAttemptId());
         if (attemptOpt.isEmpty()) {
-            return "Intento de evaluación no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Intento de evaluación no encontrado"));
         }
 
-        // Verificar si la pregunta existe
         Optional<Question> questionOpt = questionRepository.findById(dto.getQuestionId());
         if (questionOpt.isEmpty()) {
-            return "Pregunta no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Pregunta no encontrada"));
         }
 
-        // Verificar si ya existe una respuesta para esta pregunta en este intento
-        if (answerRepository.existsByAttemptIdAndQuestionId(dto.getAttemptId(), dto.getQuestionId())) {
-            return "Ya existe una respuesta para esta pregunta en este intento";
+        boolean exists = answerRepository.existsByAttemptIdAndQuestionId(dto.getAttemptId(), dto.getQuestionId());
+        if (exists) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe una respuesta para esta pregunta en este intento"));
         }
 
         QuestionAnswer answer = new QuestionAnswer();
@@ -51,47 +54,56 @@ public class QuestionAnswerController {
         answer.setQuestion(questionOpt.get());
 
         answerRepository.save(answer);
-        return "Respuesta creada correctamente";
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Respuesta creada correctamente"));
     }
 
     @GetMapping
-    public List<QuestionAnswer> listarAnswers() {
-        return answerRepository.findAll();
+    public ResponseEntity<List<QuestionAnswer>> listarAnswers() {
+        return ResponseEntity.ok(answerRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public QuestionAnswer obtenerAnswer(@PathVariable Long id) {
-        return answerRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerAnswer(@PathVariable Long id) {
+        Optional<QuestionAnswer> answerOpt = answerRepository.findById(id);
+        if (answerOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Respuesta no encontrada"));
+        }
+        return ResponseEntity.ok(answerOpt.get());
     }
 
     @GetMapping("/attempt/{attemptId}")
-    public List<QuestionAnswer> listarAnswersPorIntento(@PathVariable Long attemptId) {
-        return answerRepository.findByAttemptId(attemptId);
+    public ResponseEntity<List<QuestionAnswer>> listarAnswersPorIntento(@PathVariable Long attemptId) {
+        List<QuestionAnswer> answers = answerRepository.findByAttemptId(attemptId);
+        return ResponseEntity.ok(answers);
     }
 
     @PutMapping("/{id}")
-    public String actualizarAnswer(@PathVariable Long id, @RequestBody QuestionAnswerDTO dto) {
+    public ResponseEntity<?> actualizarAnswer(@PathVariable Long id, @RequestBody QuestionAnswerDTO dto) {
         Optional<QuestionAnswer> answerOpt = answerRepository.findById(id);
         if (answerOpt.isEmpty()) {
-            return "Respuesta no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Respuesta no encontrada"));
         }
 
         QuestionAnswer answer = answerOpt.get();
 
-        // Si se cambia el intento, verificar que exista
         if (!answer.getAttempt().getId().equals(dto.getAttemptId())) {
             Optional<EvaluationAttempt> attemptOpt = attemptRepository.findById(dto.getAttemptId());
             if (attemptOpt.isEmpty()) {
-                return "Intento de evaluación no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Intento de evaluación no encontrado"));
             }
             answer.setAttempt(attemptOpt.get());
         }
 
-        // Si se cambia la pregunta, verificar que exista
         if (!answer.getQuestion().getId().equals(dto.getQuestionId())) {
             Optional<Question> questionOpt = questionRepository.findById(dto.getQuestionId());
             if (questionOpt.isEmpty()) {
-                return "Pregunta no encontrada";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Pregunta no encontrada"));
             }
             answer.setQuestion(questionOpt.get());
         }
@@ -100,16 +112,18 @@ public class QuestionAnswerController {
         answer.setCorrect(dto.getCorrect());
 
         answerRepository.save(answer);
-        return "Respuesta actualizada correctamente";
+
+        return ResponseEntity.ok(Map.of("message", "Respuesta actualizada correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarAnswer(@PathVariable Long id) {
-        if (answerRepository.existsById(id)) {
-            answerRepository.deleteById(id);
-            return "Respuesta eliminada correctamente";
-        } else {
-            return "Respuesta no encontrada";
+    public ResponseEntity<?> eliminarAnswer(@PathVariable Long id) {
+        if (!answerRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Respuesta no encontrada"));
         }
+
+        answerRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Respuesta eliminada correctamente"));
     }
 }

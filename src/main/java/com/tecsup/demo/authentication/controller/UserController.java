@@ -5,11 +5,12 @@ import com.tecsup.demo.authentication.model.User;
 import com.tecsup.demo.authentication.repository.UserRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/users")
@@ -19,19 +20,19 @@ public class UserController {
     private UserRepository userRepository;
 
     @PostMapping
-    public String crearUser(@RequestBody UserDTO dto) {
-        // Verificar si ya existe un usuario con el mismo username
+    public ResponseEntity<?> crearUser(@RequestBody UserDTO dto) {
         if (userRepository.existsByUsername(dto.getUsername())) {
-            return "Ya existe un usuario con el username: " + dto.getUsername();
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe un usuario con el username: " + dto.getUsername()));
         }
 
-        // Verificar si ya existe un usuario con el mismo email
         if (userRepository.existsByEmail(dto.getEmail())) {
-            return "Ya existe un usuario con el email: " + dto.getEmail();
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe un usuario con el email: " + dto.getEmail()));
         }
 
         User user = new User();
-        user.setPassword(dto.getPassword()); // En producción, encriptar la contraseña
+        user.setPassword(dto.getPassword()); // ⚠️ En producción, usar BCrypt o similar para encriptar
         user.setUsername(dto.getUsername());
         user.setIsStaff(dto.getIsStaff());
         user.setIsActive(dto.getIsActive());
@@ -45,41 +46,49 @@ public class UserController {
         user.setIsSuperuser(false);
 
         userRepository.save(user);
-        return "Usuario creado correctamente";
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Usuario creado correctamente"));
     }
 
     @GetMapping
-    public List<User> listarUsers() {
-        return userRepository.findAll();
+    public ResponseEntity<List<User>> listarUsers() {
+        List<User> users = userRepository.findAll();
+        return ResponseEntity.ok(users);
     }
 
     @GetMapping("/{id}")
-    public User obtenerUser(@PathVariable Long id) {
-        return userRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerUser(@PathVariable Long id) {
+        Optional<User> userOpt = userRepository.findById(id);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Usuario no encontrado"));
+        }
+        return ResponseEntity.ok(userOpt.get());
     }
 
     @PutMapping("/{id}")
-    public String actualizarUser(@PathVariable Long id, @RequestBody UserDTO dto) {
+    public ResponseEntity<?> actualizarUser(@PathVariable Long id, @RequestBody UserDTO dto) {
         Optional<User> userOpt = userRepository.findById(id);
         if (userOpt.isEmpty()) {
-            return "Usuario no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Usuario no encontrado"));
         }
 
         User user = userOpt.get();
 
-        // Verificar si el nuevo username ya existe (y no es el mismo usuario)
         if (!user.getUsername().equals(dto.getUsername()) &&
                 userRepository.existsByUsername(dto.getUsername())) {
-            return "Ya existe un usuario con el username: " + dto.getUsername();
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe un usuario con el username: " + dto.getUsername()));
         }
 
-        // Verificar si el nuevo email ya existe (y no es el mismo usuario)
         if (!user.getEmail().equals(dto.getEmail()) &&
                 userRepository.existsByEmail(dto.getEmail())) {
-            return "Ya existe un usuario con el email: " + dto.getEmail();
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe un usuario con el email: " + dto.getEmail()));
         }
 
-        user.setPassword(dto.getPassword()); // En producción, encriptar la contraseña
+        user.setPassword(dto.getPassword()); // ⚠️ En producción, hash the password
         user.setUsername(dto.getUsername());
         user.setIsStaff(dto.getIsStaff());
         user.setIsActive(dto.getIsActive());
@@ -91,16 +100,17 @@ public class UserController {
         user.setRole(dto.getRole());
 
         userRepository.save(user);
-        return "Usuario actualizado correctamente";
+        return ResponseEntity.ok(Map.of("message", "Usuario actualizado correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarUser(@PathVariable Long id) {
-        if (userRepository.existsById(id)) {
-            userRepository.deleteById(id);
-            return "Usuario eliminado correctamente";
-        } else {
-            return "Usuario no encontrado";
+    public ResponseEntity<?> eliminarUser(@PathVariable Long id) {
+        if (!userRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Usuario no encontrado"));
         }
+
+        userRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Usuario eliminado correctamente"));
     }
 }

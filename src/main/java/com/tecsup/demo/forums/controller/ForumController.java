@@ -7,9 +7,14 @@ import com.tecsup.demo.authentication.model.User;
 import com.tecsup.demo.authentication.repository.UserRepository;
 import com.tecsup.demo.courses.model.Module;
 import com.tecsup.demo.courses.repository.ModuleRepository;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -26,22 +31,22 @@ public class ForumController {
     private ModuleRepository moduleRepository;
 
     @PostMapping
-    public String crearForum(@RequestBody ForumDTO dto) {
-        // Verificar si el autor existe
+    public ResponseEntity<?> crearForum(@RequestBody ForumDTO dto) {
         Optional<User> authorOpt = userRepository.findById(dto.getAuthorId());
         if (authorOpt.isEmpty()) {
-            return "Usuario autor no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Usuario autor no encontrado"));
         }
 
-        // Verificar si el módulo existe
         Optional<Module> moduleOpt = moduleRepository.findById(dto.getModuleId());
         if (moduleOpt.isEmpty()) {
-            return "Módulo no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Módulo no encontrado"));
         }
 
-        // Verificar si ya existe un foro con el mismo título en el módulo
         if (forumRepository.existsByModuleIdAndTitle(dto.getModuleId(), dto.getTitle())) {
-            return "Ya existe un foro con el título '" + dto.getTitle() + "' en este módulo";
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe un foro con el título '" + dto.getTitle() + "' en este módulo"));
         }
 
         Forum forum = new Forum();
@@ -52,60 +57,68 @@ public class ForumController {
         forum.setModule(moduleOpt.get());
 
         forumRepository.save(forum);
-        return "Foro creado correctamente";
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Foro creado correctamente"));
     }
 
     @GetMapping
-    public List<Forum> listarForums() {
-        return forumRepository.findAll();
+    public ResponseEntity<List<Forum>> listarForums() {
+        return ResponseEntity.ok(forumRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public Forum obtenerForum(@PathVariable Long id) {
-        return forumRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerForum(@PathVariable Long id) {
+        Optional<Forum> forumOpt = forumRepository.findById(id);
+        if (forumOpt.isPresent()) {
+            return ResponseEntity.ok(forumOpt.get());
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Foro no encontrado"));
+        }
     }
 
     @GetMapping("/module/{moduleId}")
-    public List<Forum> listarForumsPorModulo(@PathVariable Long moduleId) {
-        return forumRepository.findByModuleIdOrderByCreationDateDesc(moduleId);
+    public ResponseEntity<List<Forum>> listarForumsPorModulo(@PathVariable Long moduleId) {
+        return ResponseEntity.ok(forumRepository.findByModuleIdOrderByCreationDateDesc(moduleId));
     }
 
     @GetMapping("/author/{authorId}")
-    public List<Forum> listarForumsPorAutor(@PathVariable Long authorId) {
-        return forumRepository.findByAuthorIdOrderByCreationDateDesc(authorId);
+    public ResponseEntity<List<Forum>> listarForumsPorAutor(@PathVariable Long authorId) {
+        return ResponseEntity.ok(forumRepository.findByAuthorIdOrderByCreationDateDesc(authorId));
     }
 
     @PutMapping("/{id}")
-    public String actualizarForum(@PathVariable Long id, @RequestBody ForumDTO dto) {
+    public ResponseEntity<?> actualizarForum(@PathVariable Long id, @RequestBody ForumDTO dto) {
         Optional<Forum> forumOpt = forumRepository.findById(id);
         if (forumOpt.isEmpty()) {
-            return "Foro no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Foro no encontrado"));
         }
 
         Forum forum = forumOpt.get();
 
-        // Si se cambia el autor, verificar que exista
         if (!forum.getAuthor().getId().equals(dto.getAuthorId())) {
             Optional<User> authorOpt = userRepository.findById(dto.getAuthorId());
             if (authorOpt.isEmpty()) {
-                return "Usuario autor no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Usuario autor no encontrado"));
             }
             forum.setAuthor(authorOpt.get());
         }
 
-        // Si se cambia el módulo, verificar que exista
         if (!forum.getModule().getId().equals(dto.getModuleId())) {
             Optional<Module> moduleOpt = moduleRepository.findById(dto.getModuleId());
             if (moduleOpt.isEmpty()) {
-                return "Módulo no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Módulo no encontrado"));
             }
             forum.setModule(moduleOpt.get());
         }
 
-        // Verificar si el nuevo título entra en conflicto con otro foro del módulo
         if (!forum.getTitle().equals(dto.getTitle()) &&
                 forumRepository.existsByModuleIdAndTitle(dto.getModuleId(), dto.getTitle())) {
-            return "Ya existe un foro con el título '" + dto.getTitle() + "' en este módulo";
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe un foro con el título '" + dto.getTitle() + "' en este módulo"));
         }
 
         forum.setTitle(dto.getTitle());
@@ -113,16 +126,17 @@ public class ForumController {
         forum.setCreationDate(dto.getCreationDate());
 
         forumRepository.save(forum);
-        return "Foro actualizado correctamente";
+        return ResponseEntity.ok(Map.of("message", "Foro actualizado correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarForum(@PathVariable Long id) {
+    public ResponseEntity<?> eliminarForum(@PathVariable Long id) {
         if (forumRepository.existsById(id)) {
             forumRepository.deleteById(id);
-            return "Foro eliminado correctamente";
+            return ResponseEntity.ok(Map.of("message", "Foro eliminado correctamente"));
         } else {
-            return "Foro no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Foro no encontrado"));
         }
     }
 }

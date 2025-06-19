@@ -9,11 +9,12 @@ import com.tecsup.demo.content.repository.MaterialRepository;
 import com.tecsup.demo.authentication.repository.UserRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/favorites")
@@ -29,76 +30,89 @@ public class FavoriteMaterialController {
     private MaterialRepository materialRepository;
 
     @PostMapping
-    public String agregarFavorito(@RequestBody FavoriteMaterialDTO dto) {
-        // Verificar si el usuario existe
+    public ResponseEntity<?> agregarFavorito(@RequestBody FavoriteMaterialDTO dto) {
         Optional<User> userOpt = userRepository.findById(dto.getUserId());
         if (userOpt.isEmpty()) {
-            return "Usuario no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Usuario no encontrado"));
         }
 
-        // Verificar si el material existe
         Optional<Material> materialOpt = materialRepository.findById(dto.getMaterialId());
         if (materialOpt.isEmpty()) {
-            return "Material no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Material no encontrado"));
         }
 
-        // Verificar si ya existe este favorito (evitar duplicados)
         if (favoriteMaterialRepository.existsByUserIdAndMaterialId(dto.getUserId(), dto.getMaterialId())) {
-            return "El material ya está en favoritos de este usuario";
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "El material ya está en favoritos de este usuario"));
         }
 
-        FavoriteMaterial favoriteMaterial = new FavoriteMaterial();
-        favoriteMaterial.setDate(LocalDateTime.now());
-        favoriteMaterial.setUser(userOpt.get());
-        favoriteMaterial.setMaterial(materialOpt.get());
+        FavoriteMaterial favorite = new FavoriteMaterial();
+        favorite.setDate(LocalDateTime.now());
+        favorite.setUser(userOpt.get());
+        favorite.setMaterial(materialOpt.get());
 
-        favoriteMaterialRepository.save(favoriteMaterial);
-        return "Material agregado a favoritos correctamente";
+        favoriteMaterialRepository.save(favorite);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Material agregado a favoritos correctamente"));
     }
 
     @GetMapping
-    public List<FavoriteMaterial> listarTodosFavoritos() {
-        return favoriteMaterialRepository.findAll();
+    public ResponseEntity<List<FavoriteMaterial>> listarTodosFavoritos() {
+        return ResponseEntity.ok(favoriteMaterialRepository.findAll());
     }
 
     @GetMapping("/user/{userId}")
-    public List<FavoriteMaterial> listarFavoritosPorUsuario(@PathVariable Long userId) {
-        return favoriteMaterialRepository.findByUserIdOrderByDateDesc(userId);
+    public ResponseEntity<?> listarFavoritosPorUsuario(@PathVariable Long userId) {
+        if (!userRepository.existsById(userId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Usuario no encontrado"));
+        }
+        List<FavoriteMaterial> favoritos = favoriteMaterialRepository.findByUserIdOrderByDateDesc(userId);
+        return ResponseEntity.ok(favoritos);
     }
 
     @GetMapping("/material/{materialId}")
-    public List<FavoriteMaterial> listarUsuariosPorMaterial(@PathVariable Long materialId) {
-        return favoriteMaterialRepository.findByMaterialIdOrderByDateDesc(materialId);
+    public ResponseEntity<?> listarUsuariosPorMaterial(@PathVariable Long materialId) {
+        if (!materialRepository.existsById(materialId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Material no encontrado"));
+        }
+        List<FavoriteMaterial> usuarios = favoriteMaterialRepository.findByMaterialIdOrderByDateDesc(materialId);
+        return ResponseEntity.ok(usuarios);
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarFavorito(@PathVariable Long id) {
-        if (favoriteMaterialRepository.existsById(id)) {
-            favoriteMaterialRepository.deleteById(id);
-            return "Favorito eliminado correctamente";
-        } else {
-            return "Favorito no encontrado";
+    public ResponseEntity<?> eliminarFavorito(@PathVariable Long id) {
+        if (!favoriteMaterialRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Favorito no encontrado"));
         }
+
+        favoriteMaterialRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Favorito eliminado correctamente"));
     }
 
     @DeleteMapping("/user/{userId}/material/{materialId}")
-    public String eliminarFavoritoPorUsuarioYMaterial(
+    public ResponseEntity<?> eliminarFavoritoPorUsuarioYMaterial(
             @PathVariable Long userId,
             @PathVariable Long materialId) {
 
-        Optional<FavoriteMaterial> favoriteOpt =
-                favoriteMaterialRepository.findByUserIdAndMaterialId(userId, materialId);
+        Optional<FavoriteMaterial> favoriteOpt = favoriteMaterialRepository.findByUserIdAndMaterialId(userId, materialId);
 
-        if (favoriteOpt.isPresent()) {
-            favoriteMaterialRepository.delete(favoriteOpt.get());
-            return "Favorito eliminado correctamente";
-        } else {
-            return "Favorito no encontrado";
+        if (favoriteOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Favorito no encontrado"));
         }
+
+        favoriteMaterialRepository.delete(favoriteOpt.get());
+        return ResponseEntity.ok(Map.of("message", "Favorito eliminado correctamente"));
     }
 
     @GetMapping("/check/{userId}/{materialId}")
-    public boolean verificarSiEsFavorito(@PathVariable Long userId, @PathVariable Long materialId) {
-        return favoriteMaterialRepository.existsByUserIdAndMaterialId(userId, materialId);
+    public ResponseEntity<?> verificarSiEsFavorito(@PathVariable Long userId, @PathVariable Long materialId) {
+        boolean existe = favoriteMaterialRepository.existsByUserIdAndMaterialId(userId, materialId);
+        return ResponseEntity.ok(Map.of("isFavorite", existe));
     }
 }

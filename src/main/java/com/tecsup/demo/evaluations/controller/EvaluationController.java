@@ -6,9 +6,11 @@ import com.tecsup.demo.evaluations.repository.EvaluationRepository;
 import com.tecsup.demo.courses.model.Module;
 import com.tecsup.demo.courses.repository.ModuleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
-import java.util.Optional;
+
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/evaluations")
@@ -21,16 +23,17 @@ public class EvaluationController {
     private ModuleRepository moduleRepository;
 
     @PostMapping
-    public String crearEvaluation(@RequestBody EvaluationDTO dto) {
-        // Verificar si el módulo existe
+    public ResponseEntity<?> crearEvaluation(@RequestBody EvaluationDTO dto) {
         Optional<Module> moduleOpt = moduleRepository.findById(dto.getModuleId());
         if (moduleOpt.isEmpty()) {
-            return "Módulo no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Módulo no encontrado"));
         }
 
-        // Verificar si ya existe una evaluación con el mismo título en el módulo
-        if (evaluationRepository.existsByModuleIdAndTitle(dto.getModuleId(), dto.getTitle())) {
-            return "Ya existe una evaluación con el título '" + dto.getTitle() + "' en este módulo";
+        boolean exists = evaluationRepository.existsByModuleIdAndTitle(dto.getModuleId(), dto.getTitle());
+        if (exists) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe una evaluación con el título '" + dto.getTitle() + "' en este módulo"));
         }
 
         Evaluation evaluation = new Evaluation();
@@ -42,46 +45,55 @@ public class EvaluationController {
         evaluation.setModule(moduleOpt.get());
 
         evaluationRepository.save(evaluation);
-        return "Evaluación creada correctamente";
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Evaluación creada correctamente"));
     }
 
     @GetMapping
-    public List<Evaluation> listarEvaluations() {
-        return evaluationRepository.findAll();
+    public ResponseEntity<List<Evaluation>> listarEvaluations() {
+        return ResponseEntity.ok(evaluationRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public Evaluation obtenerEvaluation(@PathVariable Long id) {
-        return evaluationRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerEvaluation(@PathVariable Long id) {
+        Optional<Evaluation> evaluationOpt = evaluationRepository.findById(id);
+        if (evaluationOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Evaluación no encontrada"));
+        }
+        return ResponseEntity.ok(evaluationOpt.get());
     }
 
     @GetMapping("/module/{moduleId}")
-    public List<Evaluation> listarEvaluationsPorModulo(@PathVariable Long moduleId) {
-        return evaluationRepository.findByModuleIdOrderByStartDate(moduleId);
+    public ResponseEntity<List<Evaluation>> listarEvaluationsPorModulo(@PathVariable Long moduleId) {
+        List<Evaluation> evaluations = evaluationRepository.findByModuleIdOrderByStartDate(moduleId);
+        return ResponseEntity.ok(evaluations);
     }
 
     @PutMapping("/{id}")
-    public String actualizarEvaluation(@PathVariable Long id, @RequestBody EvaluationDTO dto) {
+    public ResponseEntity<?> actualizarEvaluation(@PathVariable Long id, @RequestBody EvaluationDTO dto) {
         Optional<Evaluation> evaluationOpt = evaluationRepository.findById(id);
         if (evaluationOpt.isEmpty()) {
-            return "Evaluación no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Evaluación no encontrada"));
         }
 
         Evaluation evaluation = evaluationOpt.get();
 
-        // Si se cambia el módulo, verificar que exista
         if (!evaluation.getModule().getId().equals(dto.getModuleId())) {
             Optional<Module> moduleOpt = moduleRepository.findById(dto.getModuleId());
             if (moduleOpt.isEmpty()) {
-                return "Módulo no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Módulo no encontrado"));
             }
             evaluation.setModule(moduleOpt.get());
         }
 
-        // Verificar si el nuevo título entra en conflicto con otra evaluación del módulo
         if (!evaluation.getTitle().equals(dto.getTitle()) &&
                 evaluationRepository.existsByModuleIdAndTitle(dto.getModuleId(), dto.getTitle())) {
-            return "Ya existe una evaluación con el título '" + dto.getTitle() + "' en este módulo";
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe una evaluación con el título '" + dto.getTitle() + "' en este módulo"));
         }
 
         evaluation.setTitle(dto.getTitle());
@@ -91,16 +103,18 @@ public class EvaluationController {
         evaluation.setTimeLimit(dto.getTimeLimit());
 
         evaluationRepository.save(evaluation);
-        return "Evaluación actualizada correctamente";
+
+        return ResponseEntity.ok(Map.of("message", "Evaluación actualizada correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarEvaluation(@PathVariable Long id) {
-        if (evaluationRepository.existsById(id)) {
-            evaluationRepository.deleteById(id);
-            return "Evaluación eliminada correctamente";
-        } else {
-            return "Evaluación no encontrada";
+    public ResponseEntity<?> eliminarEvaluation(@PathVariable Long id) {
+        if (!evaluationRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Evaluación no encontrada"));
         }
+
+        evaluationRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Evaluación eliminada correctamente"));
     }
 }

@@ -8,9 +8,11 @@ import com.tecsup.demo.evaluations.repository.EvaluationRepository;
 import com.tecsup.demo.authentication.model.User;
 import com.tecsup.demo.authentication.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
-import java.util.Optional;
+
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/evaluation-attempts")
@@ -26,22 +28,23 @@ public class EvaluationAttemptController {
     private UserRepository userRepository;
 
     @PostMapping
-    public String crearAttempt(@RequestBody EvaluationAttemptDTO dto) {
-        // Verificar si la evaluación existe
+    public ResponseEntity<?> crearAttempt(@RequestBody EvaluationAttemptDTO dto) {
         Optional<Evaluation> evaluationOpt = evaluationRepository.findById(dto.getEvaluationId());
         if (evaluationOpt.isEmpty()) {
-            return "Evaluación no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Evaluación no encontrada"));
         }
 
-        // Verificar si el usuario existe
         Optional<User> userOpt = userRepository.findById(dto.getUserId());
         if (userOpt.isEmpty()) {
-            return "Usuario no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Usuario no encontrado"));
         }
 
-        // Verificar si ya existe un intento para esta evaluación y usuario
-        if (attemptRepository.existsByEvaluationIdAndUserId(dto.getEvaluationId(), dto.getUserId())) {
-            return "Ya existe un intento para esta evaluación y usuario";
+        boolean exists = attemptRepository.existsByEvaluationIdAndUserId(dto.getEvaluationId(), dto.getUserId());
+        if (exists) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe un intento para esta evaluación y usuario"));
         }
 
         EvaluationAttempt attempt = new EvaluationAttempt();
@@ -53,52 +56,62 @@ public class EvaluationAttemptController {
         attempt.setUser(userOpt.get());
 
         attemptRepository.save(attempt);
-        return "Intento de evaluación creado correctamente";
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Intento de evaluación creado correctamente"));
     }
 
     @GetMapping
-    public List<EvaluationAttempt> listarAttempts() {
-        return attemptRepository.findAll();
+    public ResponseEntity<List<EvaluationAttempt>> listarAttempts() {
+        return ResponseEntity.ok(attemptRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public EvaluationAttempt obtenerAttempt(@PathVariable Long id) {
-        return attemptRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerAttempt(@PathVariable Long id) {
+        Optional<EvaluationAttempt> attemptOpt = attemptRepository.findById(id);
+        if (attemptOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Intento de evaluación no encontrado"));
+        }
+        return ResponseEntity.ok(attemptOpt.get());
     }
 
     @GetMapping("/evaluation/{evaluationId}")
-    public List<EvaluationAttempt> listarAttemptsPorEvaluacion(@PathVariable Long evaluationId) {
-        return attemptRepository.findByEvaluationIdOrderBySubmissionDate(evaluationId);
+    public ResponseEntity<List<EvaluationAttempt>> listarAttemptsPorEvaluacion(@PathVariable Long evaluationId) {
+        List<EvaluationAttempt> attempts = attemptRepository.findByEvaluationIdOrderBySubmissionDate(evaluationId);
+        return ResponseEntity.ok(attempts);
     }
 
     @GetMapping("/user/{userId}")
-    public List<EvaluationAttempt> listarAttemptsPorUsuario(@PathVariable Long userId) {
-        return attemptRepository.findByUserIdOrderBySubmissionDate(userId);
+    public ResponseEntity<List<EvaluationAttempt>> listarAttemptsPorUsuario(@PathVariable Long userId) {
+        List<EvaluationAttempt> attempts = attemptRepository.findByUserIdOrderBySubmissionDate(userId);
+        return ResponseEntity.ok(attempts);
     }
 
     @PutMapping("/{id}")
-    public String actualizarAttempt(@PathVariable Long id, @RequestBody EvaluationAttemptDTO dto) {
+    public ResponseEntity<?> actualizarAttempt(@PathVariable Long id, @RequestBody EvaluationAttemptDTO dto) {
         Optional<EvaluationAttempt> attemptOpt = attemptRepository.findById(id);
         if (attemptOpt.isEmpty()) {
-            return "Intento de evaluación no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Intento de evaluación no encontrado"));
         }
 
         EvaluationAttempt attempt = attemptOpt.get();
 
-        // Si se cambia la evaluación, verificar que exista
         if (!attempt.getEvaluation().getId().equals(dto.getEvaluationId())) {
             Optional<Evaluation> evaluationOpt = evaluationRepository.findById(dto.getEvaluationId());
             if (evaluationOpt.isEmpty()) {
-                return "Evaluación no encontrada";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Evaluación no encontrada"));
             }
             attempt.setEvaluation(evaluationOpt.get());
         }
 
-        // Si se cambia el usuario, verificar que exista
         if (!attempt.getUser().getId().equals(dto.getUserId())) {
             Optional<User> userOpt = userRepository.findById(dto.getUserId());
             if (userOpt.isEmpty()) {
-                return "Usuario no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Usuario no encontrado"));
             }
             attempt.setUser(userOpt.get());
         }
@@ -109,16 +122,18 @@ public class EvaluationAttemptController {
         attempt.setComments(dto.getComments());
 
         attemptRepository.save(attempt);
-        return "Intento de evaluación actualizado correctamente";
+
+        return ResponseEntity.ok(Map.of("message", "Intento de evaluación actualizado correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarAttempt(@PathVariable Long id) {
-        if (attemptRepository.existsById(id)) {
-            attemptRepository.deleteById(id);
-            return "Intento de evaluación eliminado correctamente";
-        } else {
-            return "Intento de evaluación no encontrado";
+    public ResponseEntity<?> eliminarAttempt(@PathVariable Long id) {
+        if (!attemptRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Intento de evaluación no encontrado"));
         }
+
+        attemptRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Intento de evaluación eliminado correctamente"));
     }
 }

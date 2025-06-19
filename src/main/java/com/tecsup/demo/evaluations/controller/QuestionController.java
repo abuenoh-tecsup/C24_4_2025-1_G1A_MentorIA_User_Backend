@@ -6,9 +6,11 @@ import com.tecsup.demo.evaluations.model.Evaluation;
 import com.tecsup.demo.evaluations.repository.QuestionRepository;
 import com.tecsup.demo.evaluations.repository.EvaluationRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import java.util.List;
-import java.util.Optional;
+
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/questions")
@@ -21,11 +23,11 @@ public class QuestionController {
     private EvaluationRepository evaluationRepository;
 
     @PostMapping
-    public String crearQuestion(@RequestBody QuestionDTO dto) {
-        // Verificar si la evaluación existe
+    public ResponseEntity<?> crearQuestion(@RequestBody QuestionDTO dto) {
         Optional<Evaluation> evaluationOpt = evaluationRepository.findById(dto.getEvaluationId());
         if (evaluationOpt.isEmpty()) {
-            return "Evaluación no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Evaluación no encontrada"));
         }
 
         Question question = new Question();
@@ -36,38 +38,46 @@ public class QuestionController {
         question.setEvaluation(evaluationOpt.get());
 
         questionRepository.save(question);
-        return "Pregunta creada correctamente";
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Pregunta creada correctamente"));
     }
 
     @GetMapping
-    public List<Question> listarQuestions() {
-        return questionRepository.findAll();
+    public ResponseEntity<List<Question>> listarQuestions() {
+        return ResponseEntity.ok(questionRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public Question obtenerQuestion(@PathVariable Long id) {
-        return questionRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerQuestion(@PathVariable Long id) {
+        Optional<Question> questionOpt = questionRepository.findById(id);
+        if (questionOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Pregunta no encontrada"));
+        }
+        return ResponseEntity.ok(questionOpt.get());
     }
 
     @GetMapping("/evaluation/{evaluationId}")
-    public List<Question> listarQuestionsPorEvaluacion(@PathVariable Long evaluationId) {
-        return questionRepository.findByEvaluationIdOrderById(evaluationId);
+    public ResponseEntity<List<Question>> listarQuestionsPorEvaluacion(@PathVariable Long evaluationId) {
+        return ResponseEntity.ok(questionRepository.findByEvaluationIdOrderById(evaluationId));
     }
 
     @PutMapping("/{id}")
-    public String actualizarQuestion(@PathVariable Long id, @RequestBody QuestionDTO dto) {
+    public ResponseEntity<?> actualizarQuestion(@PathVariable Long id, @RequestBody QuestionDTO dto) {
         Optional<Question> questionOpt = questionRepository.findById(id);
         if (questionOpt.isEmpty()) {
-            return "Pregunta no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Pregunta no encontrada"));
         }
 
         Question question = questionOpt.get();
 
-        // Si se cambia la evaluación, verificar que exista
         if (!question.getEvaluation().getId().equals(dto.getEvaluationId())) {
             Optional<Evaluation> evaluationOpt = evaluationRepository.findById(dto.getEvaluationId());
             if (evaluationOpt.isEmpty()) {
-                return "Evaluación no encontrada";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Evaluación no encontrada"));
             }
             question.setEvaluation(evaluationOpt.get());
         }
@@ -78,16 +88,18 @@ public class QuestionController {
         question.setCorrectAnswer(dto.getCorrectAnswer());
 
         questionRepository.save(question);
-        return "Pregunta actualizada correctamente";
+
+        return ResponseEntity.ok(Map.of("message", "Pregunta actualizada correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarQuestion(@PathVariable Long id) {
-        if (questionRepository.existsById(id)) {
-            questionRepository.deleteById(id);
-            return "Pregunta eliminada correctamente";
-        } else {
-            return "Pregunta no encontrada";
+    public ResponseEntity<?> eliminarQuestion(@PathVariable Long id) {
+        if (!questionRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Pregunta no encontrada"));
         }
+
+        questionRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Pregunta eliminada correctamente"));
     }
 }

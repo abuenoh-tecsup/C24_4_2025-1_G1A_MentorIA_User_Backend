@@ -5,10 +5,11 @@ import com.tecsup.demo.academic.model.AcademicPeriod;
 import com.tecsup.demo.academic.repository.AcademicPeriodRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/academic-periods")
@@ -18,14 +19,14 @@ public class AcademicPeriodController {
     private AcademicPeriodRepository academicPeriodRepository;
 
     @PostMapping
-    public String crearAcademicPeriod(@RequestBody AcademicPeriodDTO dto) {
-        // Verificar si ya existe un período con el mismo año y término
+    public ResponseEntity<?> crearAcademicPeriod(@RequestBody AcademicPeriodDTO dto) {
         Optional<AcademicPeriod> existingPeriod = academicPeriodRepository
                 .findByYearAndTerm(dto.getYear(), dto.getTerm());
 
         if (existingPeriod.isPresent()) {
-            return "Ya existe un período académico para el año " + dto.getYear() +
+            String mensaje = "Ya existe un período académico para el año " + dto.getYear() +
                     " y término " + dto.getTerm();
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", mensaje));
         }
 
         AcademicPeriod academicPeriod = new AcademicPeriod();
@@ -36,29 +37,42 @@ public class AcademicPeriodController {
         academicPeriod.setEndDate(dto.getEndDate());
 
         academicPeriodRepository.save(academicPeriod);
-        return "Período académico creado correctamente";
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Período académico creado correctamente"));
     }
 
     @GetMapping
-    public List<AcademicPeriod> listarAcademicPeriods() {
-        return academicPeriodRepository.findAll();
+    public ResponseEntity<List<AcademicPeriod>> listarAcademicPeriods() {
+        List<AcademicPeriod> periods = academicPeriodRepository.findAll();
+        return ResponseEntity.ok(periods);
     }
 
     @GetMapping("/{id}")
-    public AcademicPeriod obtenerAcademicPeriod(@PathVariable Long id) {
-        return academicPeriodRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerAcademicPeriod(@PathVariable Long id) {
+        Optional<AcademicPeriod> academicPeriodOpt = academicPeriodRepository.findById(id);
+
+        if (academicPeriodOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Período académico no encontrado"));
+        }
+
+        return ResponseEntity.ok(academicPeriodOpt.get());
     }
 
     @PutMapping("/{id}")
-    public String actualizarAcademicPeriod(@PathVariable Long id, @RequestBody AcademicPeriodDTO dto) {
+    public ResponseEntity<?> actualizarAcademicPeriod(@PathVariable Long id,
+                                                      @RequestBody AcademicPeriodDTO dto) {
+
         Optional<AcademicPeriod> academicPeriodOpt = academicPeriodRepository.findById(id);
+
         if (academicPeriodOpt.isEmpty()) {
-            return "Período académico no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Período académico no encontrado"));
         }
 
         AcademicPeriod academicPeriod = academicPeriodOpt.get();
 
-        // Verificar si el cambio de año/término entra en conflicto con otro período
         if (!academicPeriod.getYear().equals(dto.getYear()) ||
                 !academicPeriod.getTerm().equals(dto.getTerm())) {
 
@@ -66,8 +80,9 @@ public class AcademicPeriodController {
                     .findByYearAndTerm(dto.getYear(), dto.getTerm());
 
             if (existingPeriod.isPresent()) {
-                return "Ya existe un período académico para el año " + dto.getYear() +
+                String mensaje = "Ya existe un período académico para el año " + dto.getYear() +
                         " y término " + dto.getTerm();
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", mensaje));
             }
         }
 
@@ -78,16 +93,18 @@ public class AcademicPeriodController {
         academicPeriod.setEndDate(dto.getEndDate());
 
         academicPeriodRepository.save(academicPeriod);
-        return "Período académico actualizado correctamente";
+
+        return ResponseEntity.ok(Map.of("message", "Período académico actualizado correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarAcademicPeriod(@PathVariable Long id) {
-        if (academicPeriodRepository.existsById(id)) {
-            academicPeriodRepository.deleteById(id);
-            return "Período académico eliminado correctamente";
-        } else {
-            return "Período académico no encontrado";
+    public ResponseEntity<?> eliminarAcademicPeriod(@PathVariable Long id) {
+        if (!academicPeriodRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Período académico no encontrado"));
         }
+
+        academicPeriodRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Período académico eliminado correctamente"));
     }
 }

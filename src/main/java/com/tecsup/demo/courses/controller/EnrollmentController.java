@@ -11,9 +11,12 @@ import com.tecsup.demo.academic.repository.AcademicPeriodRepository;
 import com.tecsup.demo.authentication.repository.StudentRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -33,29 +36,26 @@ public class EnrollmentController {
     private StudentRepository studentRepository;
 
     @PostMapping
-    public String crearEnrollment(@RequestBody EnrollmentDTO dto) {
-        // Verificar si el curso existe
+    public ResponseEntity<?> crearEnrollment(@RequestBody EnrollmentDTO dto) {
         Optional<Course> courseOpt = courseRepository.findById(dto.getCourseId());
         if (courseOpt.isEmpty()) {
-            return "Curso no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "Curso no encontrado"));
         }
 
-        // Verificar si el período académico existe
         Optional<AcademicPeriod> periodOpt = academicPeriodRepository.findById(dto.getPeriodId());
         if (periodOpt.isEmpty()) {
-            return "Período académico no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "Período académico no encontrado"));
         }
 
-        // Verificar si el estudiante existe
         Optional<Student> studentOpt = studentRepository.findById(dto.getStudentId());
         if (studentOpt.isEmpty()) {
-            return "Estudiante no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "Estudiante no encontrado"));
         }
 
-        // Verificar si ya existe una inscripción para este estudiante, curso y período
         if (enrollmentRepository.existsByStudentIdAndCourseIdAndPeriodId(
                 dto.getStudentId(), dto.getCourseId(), dto.getPeriodId())) {
-            return "El estudiante ya está inscrito en este curso para el período seleccionado";
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "El estudiante ya está inscrito en este curso para el período seleccionado"));
         }
 
         Enrollment enrollment = new Enrollment();
@@ -66,69 +66,75 @@ public class EnrollmentController {
         enrollment.setStudent(studentOpt.get());
 
         enrollmentRepository.save(enrollment);
-        return "Inscripción creada correctamente";
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Inscripción creada correctamente"));
     }
 
     @GetMapping
-    public List<Enrollment> listarEnrollments() {
-        return enrollmentRepository.findAll();
+    public ResponseEntity<List<Enrollment>> listarEnrollments() {
+        return ResponseEntity.ok(enrollmentRepository.findAll());
     }
 
     @GetMapping("/{id}")
-    public Enrollment obtenerEnrollment(@PathVariable Long id) {
-        return enrollmentRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerEnrollment(@PathVariable Long id) {
+        Optional<Enrollment> enrollmentOpt = enrollmentRepository.findById(id);
+        if (enrollmentOpt.isPresent()) {
+            return ResponseEntity.ok(enrollmentOpt.get());
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Inscripción no encontrada"));
+        }
     }
 
     @GetMapping("/student/{studentId}")
-    public List<Enrollment> listarEnrollmentsPorEstudiante(@PathVariable Long studentId) {
-        return enrollmentRepository.findByStudentId(studentId);
+    public ResponseEntity<List<Enrollment>> listarEnrollmentsPorEstudiante(@PathVariable Long studentId) {
+        return ResponseEntity.ok(enrollmentRepository.findByStudentId(studentId));
     }
 
     @GetMapping("/course/{courseId}")
-    public List<Enrollment> listarEnrollmentsPorCurso(@PathVariable Long courseId) {
-        return enrollmentRepository.findByCourseId(courseId);
+    public ResponseEntity<List<Enrollment>> listarEnrollmentsPorCurso(@PathVariable Long courseId) {
+        return ResponseEntity.ok(enrollmentRepository.findByCourseId(courseId));
     }
 
     @GetMapping("/period/{periodId}")
-    public List<Enrollment> listarEnrollmentsPorPeriodo(@PathVariable Long periodId) {
-        return enrollmentRepository.findByPeriodId(periodId);
+    public ResponseEntity<List<Enrollment>> listarEnrollmentsPorPeriodo(@PathVariable Long periodId) {
+        return ResponseEntity.ok(enrollmentRepository.findByPeriodId(periodId));
     }
 
     @PutMapping("/{id}")
-    public String actualizarEnrollment(@PathVariable Long id, @RequestBody EnrollmentDTO dto) {
+    public ResponseEntity<?> actualizarEnrollment(@PathVariable Long id, @RequestBody EnrollmentDTO dto) {
         Optional<Enrollment> enrollmentOpt = enrollmentRepository.findById(id);
         if (enrollmentOpt.isEmpty()) {
-            return "Inscripción no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Inscripción no encontrada"));
         }
 
         Enrollment enrollment = enrollmentOpt.get();
 
-        // Verificar si se cambian las relaciones y si generan conflictos
         boolean relationChanged = !enrollment.getStudent().getId().equals(dto.getStudentId()) ||
                 !enrollment.getCourse().getId().equals(dto.getCourseId()) ||
                 !enrollment.getPeriod().getId().equals(dto.getPeriodId());
 
         if (relationChanged) {
-            // Verificar si ya existe una inscripción con la nueva combinación
             if (enrollmentRepository.existsByStudentIdAndCourseIdAndPeriodId(
                     dto.getStudentId(), dto.getCourseId(), dto.getPeriodId())) {
-                return "Ya existe una inscripción para esta combinación de estudiante, curso y período";
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of("message", "Ya existe una inscripción para esta combinación de estudiante, curso y período"));
             }
 
-            // Validar que las nuevas entidades existan
             Optional<Course> courseOpt = courseRepository.findById(dto.getCourseId());
             if (courseOpt.isEmpty()) {
-                return "Curso no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "Curso no encontrado"));
             }
 
             Optional<AcademicPeriod> periodOpt = academicPeriodRepository.findById(dto.getPeriodId());
             if (periodOpt.isEmpty()) {
-                return "Período académico no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "Período académico no encontrado"));
             }
 
             Optional<Student> studentOpt = studentRepository.findById(dto.getStudentId());
             if (studentOpt.isEmpty()) {
-                return "Estudiante no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "Estudiante no encontrado"));
             }
 
             enrollment.setCourse(courseOpt.get());
@@ -140,16 +146,17 @@ public class EnrollmentController {
         enrollment.setEnrollmentDate(dto.getEnrollmentDate());
 
         enrollmentRepository.save(enrollment);
-        return "Inscripción actualizada correctamente";
+        return ResponseEntity.ok(Map.of("message", "Inscripción actualizada correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarEnrollment(@PathVariable Long id) {
+    public ResponseEntity<?> eliminarEnrollment(@PathVariable Long id) {
         if (enrollmentRepository.existsById(id)) {
             enrollmentRepository.deleteById(id);
-            return "Inscripción eliminada correctamente";
+            return ResponseEntity.ok(Map.of("message", "Inscripción eliminada correctamente"));
         } else {
-            return "Inscripción no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Inscripción no encontrada"));
         }
     }
 }

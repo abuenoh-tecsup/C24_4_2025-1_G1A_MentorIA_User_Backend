@@ -9,10 +9,11 @@ import com.tecsup.demo.authentication.repository.UserRepository;
 import com.tecsup.demo.academic.repository.CareerRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/students")
@@ -28,27 +29,27 @@ public class StudentController {
     private CareerRepository careerRepository;
 
     @PostMapping
-    public String crearStudent(@RequestBody StudentDTO dto) {
-        // Verificar si el usuario existe
+    public ResponseEntity<?> crearStudent(@RequestBody StudentDTO dto) {
         Optional<User> userOpt = userRepository.findById(dto.getUserId());
         if (userOpt.isEmpty()) {
-            return "Usuario no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Usuario no encontrado"));
         }
 
-        // Verificar si la carrera existe
         Optional<Career> careerOpt = careerRepository.findById(dto.getCareerId());
         if (careerOpt.isEmpty()) {
-            return "Carrera no encontrada";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Carrera no encontrada"));
         }
 
-        // Verificar si ya existe un estudiante con el mismo código
         if (studentRepository.existsByStudentCode(dto.getStudentCode())) {
-            return "Ya existe un estudiante con el código: " + dto.getStudentCode();
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe un estudiante con el código: " + dto.getStudentCode()));
         }
 
-        // Verificar si el usuario ya está asociado a otro estudiante
         if (studentRepository.existsByUserId(dto.getUserId())) {
-            return "El usuario ya está asociado a otro estudiante";
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "El usuario ya está asociado a otro estudiante"));
         }
 
         Student student = new Student();
@@ -61,54 +62,67 @@ public class StudentController {
         student.setUser(userOpt.get());
 
         studentRepository.save(student);
-        return "Estudiante creado correctamente";
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("message", "Estudiante creado correctamente"));
     }
 
     @GetMapping
-    public List<Student> listarStudents() {
-        return studentRepository.findAll();
+    public ResponseEntity<List<Student>> listarStudents() {
+        List<Student> estudiantes = studentRepository.findAll();
+        return ResponseEntity.ok(estudiantes);
     }
 
     @GetMapping("/{id}")
-    public Student obtenerStudent(@PathVariable Long id) {
-        return studentRepository.findById(id).orElse(null);
+    public ResponseEntity<?> obtenerStudent(@PathVariable Long id) {
+        Optional<Student> studentOpt = studentRepository.findById(id);
+
+        if (studentOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Estudiante no encontrado"));
+        }
+
+        return ResponseEntity.ok(studentOpt.get());
     }
 
     @PutMapping("/{id}")
-    public String actualizarStudent(@PathVariable Long id, @RequestBody StudentDTO dto) {
+    public ResponseEntity<?> actualizarStudent(@PathVariable Long id, @RequestBody StudentDTO dto) {
         Optional<Student> studentOpt = studentRepository.findById(id);
+
         if (studentOpt.isEmpty()) {
-            return "Estudiante no encontrado";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Estudiante no encontrado"));
         }
 
         Student student = studentOpt.get();
 
-        // Verificar si el nuevo código de estudiante ya existe (y no es el mismo estudiante)
         if (!student.getStudentCode().equals(dto.getStudentCode()) &&
                 studentRepository.existsByStudentCode(dto.getStudentCode())) {
-            return "Ya existe un estudiante con el código: " + dto.getStudentCode();
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("message", "Ya existe un estudiante con el código: " + dto.getStudentCode()));
         }
 
-        // Si se cambia el usuario, verificar que exista y no esté asociado a otro estudiante
         if (!student.getUser().getId().equals(dto.getUserId())) {
             Optional<User> userOpt = userRepository.findById(dto.getUserId());
             if (userOpt.isEmpty()) {
-                return "Usuario no encontrado";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Usuario no encontrado"));
             }
 
             if (studentRepository.existsByUserId(dto.getUserId())) {
-                return "El usuario ya está asociado a otro estudiante";
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of("message", "El usuario ya está asociado a otro estudiante"));
             }
 
             student.setUser(userOpt.get());
         }
 
-        // Si se cambia la carrera, verificar que exista
         if (!student.getCareer().getId().equals(dto.getCareerId())) {
             Optional<Career> careerOpt = careerRepository.findById(dto.getCareerId());
             if (careerOpt.isEmpty()) {
-                return "Carrera no encontrada";
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Carrera no encontrada"));
             }
+
             student.setCareer(careerOpt.get());
         }
 
@@ -119,16 +133,17 @@ public class StudentController {
         student.setStatus(dto.getStatus());
 
         studentRepository.save(student);
-        return "Estudiante actualizado correctamente";
+        return ResponseEntity.ok(Map.of("message", "Estudiante actualizado correctamente"));
     }
 
     @DeleteMapping("/{id}")
-    public String eliminarStudent(@PathVariable Long id) {
-        if (studentRepository.existsById(id)) {
-            studentRepository.deleteById(id);
-            return "Estudiante eliminado correctamente";
-        } else {
-            return "Estudiante no encontrado";
+    public ResponseEntity<?> eliminarStudent(@PathVariable Long id) {
+        if (!studentRepository.existsById(id)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Estudiante no encontrado"));
         }
+
+        studentRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Estudiante eliminado correctamente"));
     }
 }
