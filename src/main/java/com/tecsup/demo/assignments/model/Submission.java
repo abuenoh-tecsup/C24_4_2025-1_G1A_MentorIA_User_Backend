@@ -47,6 +47,6 @@ public class Submission {
     public static class SubmissionConstraints {}
 
     public enum SubmissionStatus {
-        submitted, graded, pending, late
+        submitted, graded, pending, late, empty
     }
 }
