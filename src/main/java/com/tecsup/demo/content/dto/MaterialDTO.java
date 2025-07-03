@@ -8,6 +8,5 @@ public class MaterialDTO {
     private String title;
     private String description;
     private MaterialType type;
-    private String resourceUrl;
     private Long moduleId;
 }

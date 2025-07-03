@@ -27,7 +27,7 @@ public class Material {
     @Column(name = "type", nullable = false, length = 10)
     private MaterialType type;
 
-    @Column(name = "resource_url", nullable = false, length = 200)
+    @Column(name = "resource_url", columnDefinition = "TEXT", nullable = false)
     private String resourceUrl;
 
     @Column(name = "creation_date", nullable = false)
@@ -36,6 +36,9 @@ public class Material {
     @ManyToOne
     @JoinColumn(name = "module_id", nullable = false)
     private Module module;
+
+    @Column(name = "text_plain", columnDefinition = "LONGTEXT")
+    private String textPlain;
 
     public enum MaterialType {
         document, video, link, image, audio
