@@ -4,19 +4,23 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+
 @RestController
 @RequestMapping("/api/auth")
 @CrossOrigin(origins = "*")
 public class AuthController {
 
     @Autowired
-    private AuthService authService;
+    private final AuthService authService;
 
-    @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest loginRequest) {
-        LoginResponse response = authService.login(loginRequest);
-        return ResponseEntity.ok(response);
+    public AuthController(AuthService authService) {
+        this.authService = authService;
     }
 
-    // Registro removido - solo login disponible para usuarios
+    @PostMapping("/google")
+    public ResponseEntity<?> authenticateWithGoogle(@RequestBody GoogleAuthRequest request) throws GeneralSecurityException, IOException {
+        return ResponseEntity.ok(authService.authenticateWithGoogle(request.getIdToken()));
+    }
 }

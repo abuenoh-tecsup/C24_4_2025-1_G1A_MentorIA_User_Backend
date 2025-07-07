@@ -1,5 +1,6 @@
 package com.tecsup.demo.authentication.security;
 
+import com.tecsup.demo.authentication.model.User;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,6 +60,16 @@ public class JwtUtil {
         Map<String, Object> claims = new HashMap<>();
         return createToken(claims, userDetails.getUsername());
     }
+
+    public String generateToken(User user) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", user.getId());
+        claims.put("email", user.getEmail());
+        claims.put("role", user.getRole().name());
+
+        return createToken(claims, user.getUsername());
+    }
+
 
     // Crear token
     private String createToken(Map<String, Object> claims, String subject) {

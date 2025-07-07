@@ -47,6 +47,9 @@ public class User implements UserDetails {
     @Column(name = "email", nullable = false, unique = true, length = 254)
     private String email;
 
+    @Column(name = "google_id", unique = true)
+    private String googleId;
+
     @Column(name = "phone", length = 20)
     private String phone;
 
