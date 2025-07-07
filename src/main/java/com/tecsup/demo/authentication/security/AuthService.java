@@ -34,7 +34,7 @@ public class AuthService {
     private String googleClientId;
 
 
-    public Map<String, String> authenticateWithGoogle(String idTokenString) throws GeneralSecurityException, IOException {
+    public LoginResponse authenticateWithGoogle(String idTokenString) throws GeneralSecurityException, IOException {
         // Validar token con Google
         GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier
                 .Builder(new NetHttpTransport(), JacksonFactory.getDefaultInstance())
@@ -49,7 +49,6 @@ public class AuthService {
         GoogleIdToken.Payload payload = idToken.getPayload();
         String email = payload.getEmail();
         String googleId = payload.getSubject();
-        String pictureUrl = (String) payload.get("picture");
 
         // Buscar usuario existente por email
         User user = userRepository.findByEmail(email)
@@ -64,6 +63,14 @@ public class AuthService {
         // Generar token JWT
         String token = jwtUtil.generateToken(user);
 
-        return Map.of("token", token);
+        // Usar LoginResponse para devolver una respuesta clara y estructurada
+        return new LoginResponse(
+                user.getId(),
+                token,
+                user.getUsername(),
+                user.getEmail(),
+                user.getRole().name()
+        );
     }
+
 }
